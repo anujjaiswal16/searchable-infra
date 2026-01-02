@@ -103,11 +103,11 @@ if __name__ == "__main__":
         
         if command == "plan-json" and len(sys.argv) > 2:
             send_terraform_plan_json(sys.argv[2])
-        elif command == "output" and len(sys.argv) > 3:
+        elif command == "output" and len(sys.argv) > 2:
             log_type = sys.argv[2]
             # Read from stdin or file
-            if len(sys.argv) > 4:
-                with open(sys.argv[4], 'r') as f:
+            if len(sys.argv) > 3:
+                with open(sys.argv[3], 'r') as f:
                     content = f.read()
             else:
                 content = sys.stdin.read()
@@ -116,5 +116,6 @@ if __name__ == "__main__":
             print("Usage:")
             print("  python3 send_raw_logs.py plan-json <plan.json>")
             print("  python3 send_raw_logs.py output <type> [<file>]")
+            print("  echo 'log content' | python3 send_raw_logs.py output <type>")
             sys.exit(1)
 

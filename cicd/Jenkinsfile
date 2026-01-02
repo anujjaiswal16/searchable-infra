@@ -73,20 +73,34 @@ pipeline {
             steps {
                 dir('terraform') {
                     script {
-                        // Run terraform init and send logs to Elasticsearch
-                        def initStatus = sh(
+                        // Run terraform init and capture output
+                        def initOutput = sh(
                             script: '''
-                                terraform init 2>&1 | tee /tmp/tfinit.log
-                                exit ${PIPESTATUS[0]}
+                                set +e
+                                terraform init 2>&1
+                                echo $? > /tmp/tfinit.status
                             ''',
-                            returnStatus: true
+                            returnStdout: true
                         )
                         
+                        // Get exit status
+                        def initStatus = sh(
+                            script: 'cat /tmp/tfinit.status',
+                            returnStdout: true
+                        ).trim().toInteger()
+                        
                         // Send raw init logs to Elasticsearch
-                        sh '''
+                        sh """
                             . ../venv/bin/activate
-                            cat /tmp/tfinit.log | python3 ../utils/send_raw_logs.py output init
-                        '''
+                            python3 -c "
+import sys
+sys.path.insert(0, '../utils')
+from send_raw_logs import send_terraform_output
+
+output = '''${initOutput}'''
+send_terraform_output(output, 'init')
+"
+                        """
                         
                         if (initStatus != 0) {
                             error("Terraform init failed")
@@ -109,23 +123,26 @@ pipeline {
                                     -var "environment=${TF_VAR_environment}" \
                                     -var "service_name=${TF_VAR_service_name}" 2>&1
                             ''',
-                            returnStdout: true,
-                            returnStatus: true
+                            returnStdout: true
                         )
                         
-                        // Run plan and send output to Elasticsearch
-                        sh '''
-                            terraform plan -out=tfplan \
-                                -var "app_version=${TF_VAR_app_version}" \
-                                -var "build_id=${TF_VAR_build_id}" \
-                                -var "environment=${TF_VAR_environment}" \
-                                -var "service_name=${TF_VAR_service_name}" 2>&1 | \
-                            python3 ../utils/send_raw_logs.py output plan
-                        '''
+                        // Send plan output to Elasticsearch
+                        sh """
+                            . ../venv/bin/activate
+                            python3 -c "
+import sys
+sys.path.insert(0, '../utils')
+from send_raw_logs import send_terraform_output
+
+output = '''${planOutput}'''
+send_terraform_output(output, 'plan')
+"
+                        """
                         
                         // Export plan as JSON and send
                         sh '''
                             terraform show -json tfplan > ../tfplan.json
+                            . ../venv/bin/activate
                             python3 ../utils/send_raw_logs.py plan-json ../tfplan.json
                         '''
                     }
@@ -138,16 +155,42 @@ pipeline {
                 dir('terraform') {
                     script {
                         // Run terraform apply and capture output
-                        sh '''
-                            terraform apply -auto-approve tfplan 2>&1 | \
-                            python3 ../utils/send_raw_logs.py output apply
-                        '''
+                        def applyOutput = sh(
+                            script: 'terraform apply -auto-approve tfplan 2>&1',
+                            returnStdout: true
+                        )
+                        
+                        // Send apply output to Elasticsearch
+                        sh """
+                            . ../venv/bin/activate
+                            python3 -c "
+import sys
+sys.path.insert(0, '../utils')
+from send_raw_logs import send_terraform_output
+
+output = '''${applyOutput}'''
+send_terraform_output(output, 'apply')
+"
+                        """
                         
                         // Capture terraform outputs
-                        sh '''
-                            terraform output -json > ../tfoutput.json
-                            cat ../tfoutput.json | python3 ../utils/send_raw_logs.py output output
-                        '''
+                        def tfOutput = sh(
+                            script: 'terraform output -json',
+                            returnStdout: true
+                        )
+                        
+                        // Send terraform outputs to Elasticsearch
+                        sh """
+                            . ../venv/bin/activate
+                            python3 -c "
+import sys
+sys.path.insert(0, '../utils')
+from send_raw_logs import send_terraform_output
+
+output = '''${tfOutput}'''
+send_terraform_output(output, 'output')
+"
+                        """
                     }
                 }
             }
@@ -173,7 +216,11 @@ pipeline {
             script {
                 // Send pipeline completion metadata
                 def status = currentBuild.result ?: 'SUCCESS'
-                sh '''
+                def duration = currentBuild.duration ?: 0
+                def jobName = env.JOB_NAME ?: 'unknown'
+                def buildId = env.BUILD_ID ?: 'unknown'
+                
+                sh """
                     . venv/bin/activate
                     python3 -c "
 import os
@@ -184,21 +231,21 @@ import json
 
 metadata = {
     'ci.pipeline.status': '${status}',
-    'ci.pipeline.duration': '${currentBuild.duration}',
+    'ci.pipeline.duration': '${duration}',
 }
 
 send_raw_log(
     log_content=json.dumps({
-        'pipeline': '${env.JOB_NAME}',
-        'build': '${env.BUILD_ID}',
+        'pipeline': '${jobName}',
+        'build': '${buildId}',
         'status': '${status}',
-        'duration_ms': ${currentBuild.duration},
+        'duration_ms': ${duration},
     }, indent=2),
     log_type='pipeline_completion',
     metadata=metadata
 )
 "
-                '''
+                """
             }
         }
         success {

@@ -1,0 +1,14 @@
+
+name: terraform-demo
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: hashicorp/setup-terraform@v3
+    - run: terraform -chdir=terraform init
+    - run: terraform -chdir=terraform apply -auto-approve -no-color | tee terraform.log

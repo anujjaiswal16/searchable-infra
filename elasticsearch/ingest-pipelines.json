@@ -1,0 +1,129 @@
+{
+  "description": "Elasticsearch ingest pipelines for parsing infrastructure change events",
+  "pipelines": [
+    {
+      "name": "terraform-logs-parser",
+      "description": "Parse Terraform command output logs from infra-raw-events",
+      "processors": [
+        {
+          "grok": {
+            "field": "log.raw",
+            "patterns": [
+              "%{TIMESTAMP_ISO8601:@timestamp} %{GREEDYDATA:message}",
+              "Terraform will perform the following actions:%{GREEDYDATA:plan_summary}",
+              "%{WORD:resource_action} %{DATA:resource_type}\\.%{DATA:resource_name}",
+              "Plan: %{NUMBER:plan_add} to add, %{NUMBER:plan_change} to change, %{NUMBER:plan_destroy} to destroy"
+            ],
+            "pattern_definitions": {
+              "TIMESTAMP_ISO8601": "%{YEAR}-%{MONTHNUM}-%{MONTHDAY}[T ]%{HOUR}:?%{MINUTE}(?::?%{SECOND})?%{ISO8601_TIMEZONE}?"
+            }
+          }
+        },
+        {
+          "script": {
+            "source": """
+              // Extract resource changes from Terraform plan output
+              if (ctx['log.type'] == 'terraform_plan' || ctx['log.type'] == 'terraform_plan_json') {
+                String rawLog = ctx['log.raw'];
+                
+                // Try to parse JSON if it's a plan JSON
+                if (rawLog != null && rawLog.trim().startsWith('{')) {
+                  try {
+                    Map planData = new groovy.json.JsonSlurper().parseText(rawLog);
+                    ctx['terraform.plan.resource_changes_count'] = planData.resource_changes?.size() ?: 0;
+                    
+                    // Extract resource changes
+                    if (planData.resource_changes != null) {
+                      List changes = [];
+                      for (def change : planData.resource_changes) {
+                        Map changeInfo = [
+                          'address': change.address,
+                          'type': change.type,
+                          'actions': change.change?.actions ?: [],
+                          'action': change.change?.actions?.size() > 0 ? change.change.actions[0] : 'no-op'
+                        ];
+                        changes.add(changeInfo);
+                      }
+                      ctx['terraform.resource_changes'] = changes;
+                    }
+                    
+                    // Extract variables
+                    if (planData.variables != null) {
+                      ctx['terraform.variables.app_version'] = planData.variables.app_version?.value;
+                      ctx['terraform.variables.build_id'] = planData.variables.build_id?.value;
+                      ctx['terraform.variables.environment'] = planData.variables.environment?.value;
+                      ctx['terraform.variables.service_name'] = planData.variables.service_name?.value;
+                    }
+                  } catch (Exception e) {
+                    // If JSON parsing fails, continue with other processors
+                  }
+                }
+              }
+            """,
+            "lang": "painless"
+          }
+        },
+        {
+          "set": {
+            "field": "event.category",
+            "value": "infrastructure"
+          }
+        },
+        {
+          "set": {
+            "field": "event.type",
+            "value": "{{log.type}}"
+          }
+        },
+        {
+          "set": {
+            "field": "infra.change_id",
+            "value": "{{ci.pipeline.id}}-{{ci.build.number}}"
+          }
+        },
+        {
+          "set": {
+            "field": "service.name",
+            "value": "{{terraform.variables.service_name}}",
+            "if": "ctx['terraform.variables.service_name'] != null"
+          }
+        },
+        {
+          "set": {
+            "field": "service.version",
+            "value": "{{terraform.variables.app_version}}",
+            "if": "ctx['terraform.variables.app_version'] != null"
+          }
+        },
+        {
+          "set": {
+            "field": "environment",
+            "value": "{{terraform.variables.environment}}",
+            "if": "ctx['terraform.variables.environment'] != null"
+          }
+        },
+        {
+          "set": {
+            "field": "region",
+            "value": "local"
+          }
+        },
+        {
+          "rename": {
+            "field": "ci.pipeline.id",
+            "target_field": "ci.pipeline_id"
+          }
+        }
+      ],
+      "on_failure": [
+        {
+          "set": {
+            "field": "error.message",
+            "value": "{{_ingest.on_failure_message}}"
+          }
+        }
+      ]
+    }
+  ]
+}
+

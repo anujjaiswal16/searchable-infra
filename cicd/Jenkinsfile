@@ -1,0 +1,211 @@
+pipeline {
+    agent any
+
+    environment {
+        // Elasticsearch credentials (configure in Jenkins)
+        ELASTIC_CLOUD_ENDPOINT = credentials('ELASTIC_CLOUD_ENDPOINT')
+        ELASTIC_API_KEY = credentials('ELASTIC_API_KEY')
+        
+        // CI/CD metadata for correlation
+        ENVIRONMENT = 'production'
+        SERVICE_NAME = 'demo-app'
+        
+        // Terraform variables
+        TF_VAR_app_version = "${env.BUILD_NUMBER}"
+        TF_VAR_build_id = "${env.BUILD_ID}"
+        TF_VAR_environment = "${ENVIRONMENT}"
+        TF_VAR_service_name = "${SERVICE_NAME}"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    // Handle SCM checkout gracefully - try it, but don't fail if it doesn't work
+                    // This allows the pipeline to work both with SCM and with mounted volumes
+                    try {
+                        checkout scm
+                        echo "✓ Checked out from SCM"
+                    } catch (Exception e) {
+                        echo "⚠ SCM checkout failed (expected if using mounted volumes): ${e.getMessage()}"
+                        echo "Continuing with workspace files..."
+                    }
+                    
+                    // Try to capture git metadata if in a git repo
+                    def gitCommit = sh(
+                        script: 'git rev-parse HEAD 2>/dev/null || echo "no-git"',
+                        returnStdout: true
+                    ).trim()
+                    if (gitCommit != "no-git") {
+                        env.GIT_COMMIT = gitCommit
+                        env.GIT_COMMIT_SHORT = sh(
+                            script: 'git rev-parse --short HEAD',
+                            returnStdout: true
+                        ).trim()
+                        env.GIT_BRANCH = sh(
+                            script: 'git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main"',
+                            returnStdout: true
+                        ).trim()
+                    } else {
+                        env.GIT_COMMIT = "demo-${env.BUILD_ID}"
+                        env.GIT_COMMIT_SHORT = "demo"
+                        env.GIT_BRANCH = "demo"
+                    }
+                }
+            }
+        }
+
+        stage('Setup Tools') {
+            steps {
+                    script {
+                        // Install Python dependencies
+                        sh '''
+                            python3 -m venv venv || true
+                            . venv/bin/activate
+                            pip install --quiet --upgrade pip
+                            pip install --quiet elasticsearch requests
+                        '''
+                    }
+            }
+        }
+
+        stage('Terraform Init') {
+            steps {
+                dir('terraform') {
+                    script {
+                        // Run terraform init and send logs to Elasticsearch
+                        def initStatus = sh(
+                            script: '''
+                                terraform init 2>&1 | tee /tmp/tfinit.log
+                                exit ${PIPESTATUS[0]}
+                            ''',
+                            returnStatus: true
+                        )
+                        
+                        // Send raw init logs to Elasticsearch
+                        sh '''
+                            . ../venv/bin/activate
+                            cat /tmp/tfinit.log | python3 ../utils/send_raw_logs.py output init
+                        '''
+                        
+                        if (initStatus != 0) {
+                            error("Terraform init failed")
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Terraform Plan') {
+            steps {
+                dir('terraform') {
+                    script {
+                        // Run terraform plan and capture output
+                        def planOutput = sh(
+                            script: '''
+                                terraform plan -out=tfplan \
+                                    -var "app_version=${TF_VAR_app_version}" \
+                                    -var "build_id=${TF_VAR_build_id}" \
+                                    -var "environment=${TF_VAR_environment}" \
+                                    -var "service_name=${TF_VAR_service_name}" 2>&1
+                            ''',
+                            returnStdout: true,
+                            returnStatus: true
+                        )
+                        
+                        // Run plan and send output to Elasticsearch
+                        sh '''
+                            terraform plan -out=tfplan \
+                                -var "app_version=${TF_VAR_app_version}" \
+                                -var "build_id=${TF_VAR_build_id}" \
+                                -var "environment=${TF_VAR_environment}" \
+                                -var "service_name=${TF_VAR_service_name}" 2>&1 | \
+                            python3 ../utils/send_raw_logs.py output plan
+                        '''
+                        
+                        // Export plan as JSON and send
+                        sh '''
+                            terraform show -json tfplan > ../tfplan.json
+                            python3 ../utils/send_raw_logs.py plan-json ../tfplan.json
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Terraform Apply') {
+            steps {
+                dir('terraform') {
+                    script {
+                        // Run terraform apply and capture output
+                        sh '''
+                            terraform apply -auto-approve tfplan 2>&1 | \
+                            python3 ../utils/send_raw_logs.py output apply
+                        '''
+                        
+                        // Capture terraform outputs
+                        sh '''
+                            terraform output -json > ../tfoutput.json
+                            cat ../tfoutput.json | python3 ../utils/send_raw_logs.py output output
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                script {
+                    // Wait a moment for app to start
+                    sleep(time: 5, unit: 'SECONDS')
+                    
+                    // Simple health check
+                    sh '''
+                        curl -f http://localhost:5000/ || echo "App not yet ready"
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                // Send pipeline completion metadata
+                def status = currentBuild.result ?: 'SUCCESS'
+                sh '''
+                    . venv/bin/activate
+                    python3 -c "
+import os
+import sys
+sys.path.insert(0, 'utils')
+from send_raw_logs import send_raw_log
+import json
+
+metadata = {
+    'ci.pipeline.status': '${status}',
+    'ci.pipeline.duration': '${currentBuild.duration}',
+}
+
+send_raw_log(
+    log_content=json.dumps({
+        'pipeline': '${env.JOB_NAME}',
+        'build': '${env.BUILD_ID}',
+        'status': '${status}',
+        'duration_ms': ${currentBuild.duration},
+    }, indent=2),
+    log_type='pipeline_completion',
+    metadata=metadata
+)
+"
+                '''
+            }
+        }
+        success {
+            echo "Pipeline completed successfully!"
+        }
+        failure {
+            echo "Pipeline failed!"
+        }
+    }
+}

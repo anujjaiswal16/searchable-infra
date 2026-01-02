@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  jenkins:
+    build:
+      context: ./jenkins
+      dockerfile: Dockerfile
+    container_name: jenkins
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/var/jenkins_home/workspace
+    environment:
+      - JENKINS_OPTS=--httpPort=8080
+    networks:
+      - demo-network
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel/otel-collector.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver
+      - "8888:8888"   # Prometheus metrics
+    environment:
+      - ELASTIC_CLOUD_ENDPOINT=${ELASTIC_CLOUD_ENDPOINT}
+      - ELASTIC_API_KEY=${ELASTIC_API_KEY}
+    networks:
+      - demo-network
+    restart: unless-stopped
+    depends_on:
+      - jenkins
+
+volumes:
+  jenkins_home:
+
+networks:
+  demo-network:
+    name: demo-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.19.0.0/16
+

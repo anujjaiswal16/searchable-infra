@@ -1,0 +1,23 @@
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - string:
+              scope: GLOBAL
+              id: "ELASTIC_CLOUD_ENDPOINT"
+              secret: "${ELASTIC_CLOUD_ENDPOINT}"
+          - string:
+              scope: GLOBAL
+              id: "ELASTIC_API_KEY"
+              secret: "${ELASTIC_API_KEY}"
+
+jobs:
+  - script: >
+      pipelineJob('Demo-Pipeline') {
+        definition {
+          cps {
+            script(readFileFromWorkspace('cicd/Jenkinsfile'))
+            sandbox()
+          }
+        }
+      }

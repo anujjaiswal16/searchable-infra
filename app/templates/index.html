@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elastic + HashiCorp Demo</title>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; color: #1f2937; margin: 0; padding: 0; }
+        .container { max-width: 800px; margin: 50px auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1 { color: #005571; text-align: center; }
+        .card { padding: 15px; border: 1px solid #e5e7eb; border-radius: 6px; margin-top: 20px; text-align: center; }
+        .btn { display: inline-block; padding: 10px 20px; background-color: #0077cc; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; transition: background 0.3s; }
+        .btn:hover { background-color: #005fa3; }
+        .logs { margin-top: 30px; padding: 10px; background: #111827; color: #10b981; font-family: monospace; border-radius: 6px; height: 150px; overflow-y: auto; text-align: left;}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Infrastructure Searchable Truth</h1>
+        <p style="text-align: center;">Elastic + HashiCorp Integration Demo</p>
+        
+        <div class="card">
+            <h2>Actions</h2>
+            <p>Generate traces and logs by interacting with this app.</p>
+            <button class="btn" onclick="triggerAction()">Simulate User Action</button>
+            <button class="btn" style="background-color: #ef4444;" onclick="triggerError()">Simulate Error</button>
+        </div>
+
+        <div class="logs" id="log-window">
+            <p>> System ready...</p>
+        </div>
+    </div>
+
+    <script>
+        function log(msg) {
+            const el = document.getElementById('log-window');
+            el.innerHTML += `<p>> ${msg}</p>`;
+            el.scrollTop = el.scrollHeight;
+        }
+
+        async function triggerAction() {
+            log("Sending request...");
+            try {
+                const res = await fetch('/action');
+                const data = await res.json();
+                log(`Success: ${data.message} (TraceID: ${data.trace_id})`);
+            } catch (e) {
+                log("Error sending request");
+            }
+        }
+
+        async function triggerError() {
+            log("Triggering error...");
+            try {
+                await fetch('/error');
+            } catch (e) {
+                log("Error triggered (check Elastic APM)");
+            }
+        }
+    </script>
+</body>
+</html>

@@ -2,16 +2,17 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install only essential system packages
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
-
 # Upgrade pip
 RUN pip install --upgrade pip
 
-# Copy and install requirements
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install dependencies directly (no requirements.txt needed)
+RUN pip install --no-cache-dir \
+    flask==3.0.0 \
+    opentelemetry-api==1.21.0 \
+    opentelemetry-sdk==1.21.0 \
+    opentelemetry-exporter-otlp==1.21.0 \
+    opentelemetry-instrumentation==0.42b0 \
+    opentelemetry-instrumentation-flask==0.42b0
 
 # Copy application
 COPY app.py .

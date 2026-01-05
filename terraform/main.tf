@@ -60,7 +60,6 @@ resource "docker_image" "app_image" {
   triggers = {
     app_version = var.app_version
     dockerfile_hash = filemd5("../app/Dockerfile")
-    requirements_hash = filemd5("../app/requirements.txt")
   }
 }
 

@@ -1,0 +1,86 @@
+pipeline {
+    agent any
+    
+    parameters {
+        string(name: 'SIMULATED_LATENCY', defaultValue: '0', description: 'Simulated latency in seconds')
+        string(name: 'SIMULATED_ERROR_RATE', defaultValue: '0', description: 'Simulated error rate (0-100%)')
+    }
+
+    environment {
+        ELASTIC_CLOUD_ENDPOINT = credentials('ELASTIC_CLOUD_ENDPOINT')
+        ELASTIC_API_KEY = credentials('ELASTIC_API_KEY')
+        
+        ENVIRONMENT = 'production'
+        SERVICE_NAME = 'backend-service'
+        
+        TF_VAR_app_version = "${env.BUILD_NUMBER}"
+        TF_VAR_build_id = "${env.BUILD_ID}"
+        TF_VAR_environment = "${ENVIRONMENT}"
+        TF_VAR_service_name = "${SERVICE_NAME}"
+        TF_VAR_simulated_latency = "${params.SIMULATED_LATENCY ?: '0'}"
+        TF_VAR_simulated_error_rate = "${params.SIMULATED_ERROR_RATE ?: '0'}"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Setup') {
+            steps {
+                script {
+                    sh '''
+                        python3 -m venv venv || true
+                        . venv/bin/activate
+                        pip install --quiet elasticsearch requests
+                    '''
+                }
+            }
+        }
+
+        stage('Terraform Init') {
+            steps {
+                dir('terraform-backend') {
+                    script {
+                        def initOutput = sh(script: 'terraform init -upgrade 2>&1', returnStdout: true)
+                        writeFile file: '/tmp/backend_init.txt', text: initOutput
+                        sh '''
+                            . ../venv/bin/activate
+                            cd ..
+                            cat /tmp/backend_init.txt | python3 utils/send_raw_logs.py output init
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Terraform Apply') {
+            steps {
+                dir('terraform-backend') {
+                    script {
+                        def applyOutput = sh(
+                            script: '''
+                                terraform apply -auto-approve \
+                                    -var "app_version=${TF_VAR_app_version}" \
+                                    -var "build_id=${TF_VAR_build_id}" \
+                                    -var "environment=${TF_VAR_environment}" \
+                                    -var "service_name=${TF_VAR_service_name}" \
+                                    -var "simulated_latency=${TF_VAR_simulated_latency}" \
+                                    -var "simulated_error_rate=${TF_VAR_simulated_error_rate}" 2>&1
+                            ''',
+                            returnStdout: true
+                        )
+                        writeFile file: '/tmp/backend_apply.txt', text: applyOutput
+                        sh '''
+                            . ../venv/bin/activate
+                            cd ..
+                            cat /tmp/backend_apply.txt | python3 utils/send_raw_logs.py output apply
+                        '''
+                    }
+                }
+            }
+        }
+    }
+}

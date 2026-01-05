@@ -28,3 +28,19 @@ jobs:
           }
         }
       }
+  - script: >
+      pipelineJob('Backend-Pipeline') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url("${GITHUB_REPO}")
+                }
+                branch("${GITHUB_BRANCH}")
+              }
+            }
+            scriptPath('cicd/BackendJenkinsfile')
+          }
+        }
+      }

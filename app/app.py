@@ -111,6 +111,16 @@ def action():
         # Simulate some work
         time.sleep(random.uniform(0.1, 0.5))
         
+        # Call backend service
+        import requests
+        try:
+            # Propagate trace context automatically with OTel instrumentation
+            resp = requests.get("http://backend-service:5000/api/data", timeout=5)
+            backend_data = resp.json()
+        except Exception as e:
+            logger.error(f"Failed to call backend: {e}")
+            backend_data = {"error": str(e)}
+        
         try:
             trace_id = format(span.get_span_context().trace_id, "032x") if span and span.get_span_context() else "no-trace"
         except:
@@ -119,7 +129,8 @@ def action():
         return jsonify({
             "message": "Action processed successfully",
             "trace_id": trace_id,
-            "service.version": os.getenv("APP_VERSION", "v1.0.0")
+            "service.version": os.getenv("APP_VERSION", "v1.0.0"),
+            "backend_response": backend_data
         })
     finally:
         if span:

@@ -16,6 +16,8 @@ services:
       - .:/var/jenkins_home/workspace
     environment:
       - JENKINS_OPTS=--httpPort=8080
+      - GITHUB_REPO=${GITHUB_REPO:-https://github.com/anujjaiswal16/searchable-infra.git}
+      - GITHUB_BRANCH=${GITHUB_BRANCH:-main}
     networks:
       - demo-network
     restart: unless-stopped
@@ -23,13 +25,13 @@ services:
   otel-collector:
     image: otel/opentelemetry-collector-contrib:latest
     container_name: otel-collector
-    command: ["--config=/etc/otel-collector-config.yaml"]
+    command: [ "--config=/etc/otel-collector-config.yaml" ]
     volumes:
       - ./otel/otel-collector.yaml:/etc/otel-collector-config.yaml
     ports:
-      - "4317:4317"   # OTLP gRPC receiver
-      - "4318:4318"   # OTLP HTTP receiver
-      - "8888:8888"   # Prometheus metrics
+      - "4317:4317" # OTLP gRPC receiver
+      - "4318:4318" # OTLP HTTP receiver
+      - "8888:8888" # Prometheus metrics
     environment:
       - ELASTIC_CLOUD_ENDPOINT=${ELASTIC_CLOUD_ENDPOINT}
       - ELASTIC_API_KEY=${ELASTIC_API_KEY}
@@ -42,6 +44,7 @@ services:
 volumes:
   jenkins_home:
 
+
 networks:
   demo-network:
     name: demo-network
@@ -49,4 +52,3 @@ networks:
     ipam:
       config:
         - subnet: 172.19.0.0/16
-

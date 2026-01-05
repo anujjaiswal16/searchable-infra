@@ -90,19 +90,12 @@ pipeline {
                         ).trim().toInteger()
                         
                         // Send raw init logs to Elasticsearch
-                        // Write output to temp file to avoid string escaping issues
+                        // Write output to temp file and use script directly
                         writeFile file: '/tmp/tfinit_output.txt', text: initOutput
                         sh '''
                             . ../venv/bin/activate
-                            python3 -c "
-import sys
-sys.path.insert(0, '../utils')
-from send_raw_logs import send_terraform_output
-
-with open('/tmp/tfinit_output.txt', 'r') as f:
-    output = f.read()
-send_terraform_output(output, 'init')
-"
+                            cd /var/jenkins_home/workspace
+                            cat /tmp/tfinit_output.txt | python3 utils/send_raw_logs.py output init
                         '''
                         
                         if (initStatus != 0) {
@@ -130,19 +123,12 @@ send_terraform_output(output, 'init')
                         )
                         
                         // Send plan output to Elasticsearch
-                        // Write output to temp file to avoid string escaping issues
+                        // Write output to temp file and use script directly
                         writeFile file: '/tmp/tfplan_output.txt', text: planOutput
                         sh '''
                             . ../venv/bin/activate
-                            python3 -c "
-import sys
-sys.path.insert(0, '../utils')
-from send_raw_logs import send_terraform_output
-
-with open('/tmp/tfplan_output.txt', 'r') as f:
-    output = f.read()
-send_terraform_output(output, 'plan')
-"
+                            cd /var/jenkins_home/workspace
+                            cat /tmp/tfplan_output.txt | python3 utils/send_raw_logs.py output plan
                         '''
                         
                         // Export plan as JSON and send
@@ -167,19 +153,12 @@ send_terraform_output(output, 'plan')
                         )
                         
                         // Send apply output to Elasticsearch
-                        // Write output to temp file to avoid string escaping issues
+                        // Write output to temp file and use script directly
                         writeFile file: '/tmp/tfapply_output.txt', text: applyOutput
                         sh '''
                             . ../venv/bin/activate
-                            python3 -c "
-import sys
-sys.path.insert(0, '../utils')
-from send_raw_logs import send_terraform_output
-
-with open('/tmp/tfapply_output.txt', 'r') as f:
-    output = f.read()
-send_terraform_output(output, 'apply')
-"
+                            cd /var/jenkins_home/workspace
+                            cat /tmp/tfapply_output.txt | python3 utils/send_raw_logs.py output apply
                         '''
                         
                         // Capture terraform outputs
@@ -189,19 +168,12 @@ send_terraform_output(output, 'apply')
                         )
                         
                         // Send terraform outputs to Elasticsearch
-                        // Write output to temp file to avoid string escaping issues
+                        // Write to file and use script directly
                         writeFile file: '/tmp/tfoutput.txt', text: tfOutput
                         sh '''
                             . ../venv/bin/activate
-                            python3 -c "
-import sys
-sys.path.insert(0, '../utils')
-from send_raw_logs import send_terraform_output
-
-with open('/tmp/tfoutput.txt', 'r') as f:
-    output = f.read()
-send_terraform_output(output, 'output')
-"
+                            cd /var/jenkins_home/workspace
+                            cat /tmp/tfoutput.txt | python3 utils/send_raw_logs.py output output
                         '''
                     }
                 }
@@ -243,26 +215,33 @@ send_terraform_output(output, 'output')
                 
                 sh """
                     . venv/bin/activate
+                    cd /var/jenkins_home/workspace
                     python3 -c "
 import os
 import sys
 import json
-sys.path.insert(0, 'utils')
-from send_raw_logs import send_raw_log
 
-with open('/tmp/pipeline_completion.json', 'r') as f:
-    data = json.load(f)
-
-metadata = {
-    'ci.pipeline.status': '${status}',
-    'ci.pipeline.duration': '${duration}',
-}
-
-send_raw_log(
-    log_content=json.dumps(data, indent=2),
-    log_type='pipeline_completion',
-    metadata=metadata
-)
+# Use absolute path to avoid import issues
+sys.path.insert(0, '/var/jenkins_home/workspace/utils')
+try:
+    from send_raw_logs import send_raw_log
+    
+    with open('/tmp/pipeline_completion.json', 'r') as f:
+        data = json.load(f)
+    
+    metadata = {
+        'ci.pipeline.status': '${status}',
+        'ci.pipeline.duration': '${duration}',
+    }
+    
+    send_raw_log(
+        log_content=json.dumps(data, indent=2),
+        log_type='pipeline_completion',
+        metadata=metadata
+    )
+except ImportError as e:
+    print(f'Warning: Could not import send_raw_logs: {e}', file=sys.stderr)
+    print('Pipeline completion log not sent to Elasticsearch', file=sys.stderr)
 "
                 """
             }

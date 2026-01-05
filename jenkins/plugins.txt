@@ -4,3 +4,6 @@ git
 job-dsl
 pipeline-stage-view
 timestamper
+blueocean
+pipeline-utility-steps
+opentelemetry

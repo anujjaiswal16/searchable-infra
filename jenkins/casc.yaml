@@ -15,9 +15,16 @@ jobs:
   - script: >
       pipelineJob('Demo-Pipeline') {
         definition {
-          cps {
-            script(readFileFromWorkspace('cicd/Jenkinsfile'))
-            sandbox()
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url("${GITHUB_REPO}")
+                }
+                branch("${GITHUB_BRANCH}")
+              }
+            }
+            scriptPath('cicd/Jenkinsfile')
           }
         }
       }

@@ -128,7 +128,7 @@ if __name__ == "__main__":
         
         if command == "plan-json" and len(sys.argv) > 2:
             send_terraform_plan_json(sys.argv[2])
-        elif command == "output" and len(sys.argv) > 3:
+        elif command == "output" and len(sys.argv) >= 3:
             log_type = sys.argv[2]
             # Read from stdin or file
             if len(sys.argv) > 4:

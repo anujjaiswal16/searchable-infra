@@ -90,17 +90,20 @@ pipeline {
                         ).trim().toInteger()
                         
                         // Send raw init logs to Elasticsearch
-                        sh """
+                        // Write output to temp file to avoid string escaping issues
+                        writeFile file: '/tmp/tfinit_output.txt', text: initOutput
+                        sh '''
                             . ../venv/bin/activate
                             python3 -c "
 import sys
 sys.path.insert(0, '../utils')
 from send_raw_logs import send_terraform_output
 
-output = '''${initOutput}'''
+with open('/tmp/tfinit_output.txt', 'r') as f:
+    output = f.read()
 send_terraform_output(output, 'init')
 "
-                        """
+                        '''
                         
                         if (initStatus != 0) {
                             error("Terraform init failed")
@@ -127,17 +130,20 @@ send_terraform_output(output, 'init')
                         )
                         
                         // Send plan output to Elasticsearch
-                        sh """
+                        // Write output to temp file to avoid string escaping issues
+                        writeFile file: '/tmp/tfplan_output.txt', text: planOutput
+                        sh '''
                             . ../venv/bin/activate
                             python3 -c "
 import sys
 sys.path.insert(0, '../utils')
 from send_raw_logs import send_terraform_output
 
-output = '''${planOutput}'''
+with open('/tmp/tfplan_output.txt', 'r') as f:
+    output = f.read()
 send_terraform_output(output, 'plan')
 "
-                        """
+                        '''
                         
                         // Export plan as JSON and send
                         sh '''
@@ -161,17 +167,20 @@ send_terraform_output(output, 'plan')
                         )
                         
                         // Send apply output to Elasticsearch
-                        sh """
+                        // Write output to temp file to avoid string escaping issues
+                        writeFile file: '/tmp/tfapply_output.txt', text: applyOutput
+                        sh '''
                             . ../venv/bin/activate
                             python3 -c "
 import sys
 sys.path.insert(0, '../utils')
 from send_raw_logs import send_terraform_output
 
-output = '''${applyOutput}'''
+with open('/tmp/tfapply_output.txt', 'r') as f:
+    output = f.read()
 send_terraform_output(output, 'apply')
 "
-                        """
+                        '''
                         
                         // Capture terraform outputs
                         def tfOutput = sh(
@@ -180,17 +189,20 @@ send_terraform_output(output, 'apply')
                         )
                         
                         // Send terraform outputs to Elasticsearch
-                        sh """
+                        // Write output to temp file to avoid string escaping issues
+                        writeFile file: '/tmp/tfoutput.txt', text: tfOutput
+                        sh '''
                             . ../venv/bin/activate
                             python3 -c "
 import sys
 sys.path.insert(0, '../utils')
 from send_raw_logs import send_terraform_output
 
-output = '''${tfOutput}'''
+with open('/tmp/tfoutput.txt', 'r') as f:
+    output = f.read()
 send_terraform_output(output, 'output')
 "
-                        """
+                        '''
                     }
                 }
             }
@@ -220,14 +232,26 @@ send_terraform_output(output, 'output')
                 def jobName = env.JOB_NAME ?: 'unknown'
                 def buildId = env.BUILD_ID ?: 'unknown'
                 
+                // Write metadata to temp file to avoid string escaping issues
+                def completionData = [
+                    pipeline: jobName,
+                    build: buildId,
+                    status: status,
+                    duration_ms: duration
+                ]
+                writeFile file: '/tmp/pipeline_completion.json', text: groovy.json.JsonOutput.toJson(completionData)
+                
                 sh """
                     . venv/bin/activate
                     python3 -c "
 import os
 import sys
+import json
 sys.path.insert(0, 'utils')
 from send_raw_logs import send_raw_log
-import json
+
+with open('/tmp/pipeline_completion.json', 'r') as f:
+    data = json.load(f)
 
 metadata = {
     'ci.pipeline.status': '${status}',
@@ -235,12 +259,7 @@ metadata = {
 }
 
 send_raw_log(
-    log_content=json.dumps({
-        'pipeline': '${jobName}',
-        'build': '${buildId}',
-        'status': '${status}',
-        'duration_ms': ${duration},
-    }, indent=2),
+    log_content=json.dumps(data, indent=2),
     log_type='pipeline_completion',
     metadata=metadata
 )

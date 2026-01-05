@@ -55,3 +55,4 @@ curl -X PUT "${ELASTIC_CLOUD_ENDPOINT}/_index_template/infra-raw-events-template
 echo ""
 echo "✓ Index template updated (default pipeline removed)"
 
+

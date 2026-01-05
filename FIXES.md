@@ -53,3 +53,4 @@ After these fixes, the pipeline should:
 2. Re-run the Jenkins pipeline
 3. Verify logs appear in Elasticsearch
 
+

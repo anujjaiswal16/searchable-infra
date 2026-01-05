@@ -2,6 +2,49 @@
 
 ## Common Errors and Solutions
 
+### Error: "pip install --no-cache-dir -r requirements.txt" failed (exit code 1)
+
+**Problem:** Docker build fails when installing Python dependencies.
+
+**Possible Causes:**
+1. Network connectivity issues during build
+2. Missing system dependencies for compiling Python packages
+3. Package version conflicts
+4. Outdated pip/setuptools
+
+**Solutions:**
+
+1. **Check the build logs** - The error message should show which package failed
+2. **Try building manually** to see full error:
+   ```bash
+   cd app
+   docker build -t demo-app:test . 2>&1 | tee build.log
+   ```
+3. **Check network connectivity** - The build needs internet to download packages
+4. **Verify Dockerfile** - Make sure it includes:
+   - `gcc`, `g++`, `make` for compiling packages
+   - `libffi-dev`, `libssl-dev` for SSL support
+   - `pip install --upgrade pip` before installing packages
+
+5. **Try installing packages individually** to find the problematic one:
+   ```bash
+   docker run -it --rm python:3.10-slim bash
+   pip install flask
+   pip install opentelemetry-api
+   # etc.
+   ```
+
+6. **Use a simpler requirements.txt** - Remove version constraints temporarily:
+   ```txt
+   flask
+   opentelemetry-api
+   opentelemetry-sdk
+   opentelemetry-exporter-otlp
+   opentelemetry-instrumentation
+   opentelemetry-instrumentation-flask
+   elasticsearch
+   ```
+
 ### Error: "permission denied while trying to connect to the Docker daemon socket"
 
 **Problem:** Jenkins container doesn't have permission to access the Docker socket.

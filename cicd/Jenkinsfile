@@ -94,7 +94,8 @@ pipeline {
                         writeFile file: '/tmp/tfinit_output.txt', text: initOutput
                         sh '''
                             . ../venv/bin/activate
-                            cd /var/jenkins_home/workspace
+                            # We are in terraform/ dir, go back to root to find utils
+                            cd ..
                             cat /tmp/tfinit_output.txt | python3 utils/send_raw_logs.py output init
                         '''
                         
@@ -127,7 +128,7 @@ pipeline {
                         writeFile file: '/tmp/tfplan_output.txt', text: planOutput
                         sh '''
                             . ../venv/bin/activate
-                            cd /var/jenkins_home/workspace
+                            cd ..
                             cat /tmp/tfplan_output.txt | python3 utils/send_raw_logs.py output plan
                         '''
                         
@@ -157,7 +158,7 @@ pipeline {
                         writeFile file: '/tmp/tfapply_output.txt', text: applyOutput
                         sh '''
                             . ../venv/bin/activate
-                            cd /var/jenkins_home/workspace
+                            cd ..
                             cat /tmp/tfapply_output.txt | python3 utils/send_raw_logs.py output apply
                         '''
                         
@@ -172,7 +173,7 @@ pipeline {
                         writeFile file: '/tmp/tfoutput.txt', text: tfOutput
                         sh '''
                             . ../venv/bin/activate
-                            cd /var/jenkins_home/workspace
+                            cd ..
                             cat /tmp/tfoutput.txt | python3 utils/send_raw_logs.py output output
                         '''
                     }
@@ -215,14 +216,15 @@ pipeline {
                 
                 sh """
                     . venv/bin/activate
-                    cd /var/jenkins_home/workspace
+                    # Use WORKSPACE variable
+                    # We are in root workspace here
                     python3 -c "
 import os
 import sys
 import json
 
-# Use absolute path to avoid import issues
-sys.path.insert(0, '/var/jenkins_home/workspace/utils')
+# Use relative path
+sys.path.insert(0, 'utils')
 try:
     from send_raw_logs import send_raw_log
     

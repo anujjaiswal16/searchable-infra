@@ -62,12 +62,22 @@ logger = logging.getLogger(__name__)
 @app.route('/')
 def index():
     """Home page."""
+    # Simulated latency from infrastructure config
+    try:
+        latency = float(os.getenv("SIMULATED_LATENCY", "0"))
+        if latency > 0:
+            time.sleep(latency)
+    except ValueError:
+        pass
+
     logger.info("Home page accessed", extra={
         "route": "/",
-        "service.version": os.getenv("APP_VERSION", "v1.0.0")
+        "service.version": os.getenv("APP_VERSION", "v1.0.0"),
+        "simulated_latency": latency if 'latency' in locals() else 0
     })
     return render_template('index.html',
                          app_version=os.getenv("APP_VERSION", "v1.0.0"),
+                         # ... existing args ...
                          build_id=os.getenv("BUILD_ID", "unknown"),
                          environment=os.getenv("ENVIRONMENT", "production"))
 

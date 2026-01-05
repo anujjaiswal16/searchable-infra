@@ -22,24 +22,25 @@ processors:
         action: upsert
 
 exporters:
-  otlp/elastic:
+  otlphttp/elastic:
     endpoint: ${env:ELASTIC_CLOUD_ENDPOINT}
     headers:
       Authorization: "ApiKey ${env:ELASTIC_API_KEY}"
     tls:
       insecure: false
+    compression: none
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
       processors: [resource, batch]
-      exporters: [otlp/elastic]
+      exporters: [otlphttp/elastic]
     metrics:
       receivers: [otlp]
       processors: [resource, batch]
-      exporters: [otlp/elastic]
+      exporters: [otlphttp/elastic]
     logs:
       receivers: [otlp]
       processors: [resource, batch]
-      exporters: [otlp/elastic]
+      exporters: [otlphttp/elastic]

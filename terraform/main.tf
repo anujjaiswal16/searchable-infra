@@ -35,6 +35,12 @@ variable "service_name" {
   default     = "demo-app"
 }
 
+variable "simulated_latency" {
+  description = "Simulated latency in seconds for chaos testing"
+  type        = number
+  default     = 0
+}
+
 # Use existing Docker network (created by docker-compose)
 # Try to use the demo-network, fallback to creating a new one
 data "docker_network" "demo_network" {
@@ -80,7 +86,8 @@ resource "docker_container" "app" {
     "FLASK_ENV=production",
     "APP_VERSION=${var.app_version}",
     "BUILD_ID=${var.build_id}",
-    "ENVIRONMENT=${var.environment}"
+    "ENVIRONMENT=${var.environment}",
+    "SIMULATED_LATENCY=${var.simulated_latency}"
   ]
   
   ports {

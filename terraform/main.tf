@@ -53,10 +53,14 @@ resource "docker_image" "app_image" {
     context    = "../app"
     dockerfile = "Dockerfile"
     tag        = ["demo-app:${var.app_version}", "demo-app:latest"]
+    # Force rebuild by including app_version in triggers
+    no_cache   = false
   }
   
   triggers = {
     app_version = var.app_version
+    dockerfile_hash = filemd5("../app/Dockerfile")
+    requirements_hash = filemd5("../app/requirements.txt")
   }
 }
 

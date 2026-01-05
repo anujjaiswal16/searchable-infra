@@ -2,7 +2,7 @@
 """
 Send raw Terraform logs and CI/CD metadata to Elasticsearch.
 This script sends unparsed logs to the infra-raw-events-* index.
-Raw data will be processed later using Elastic Stream feature.
+Parsing will be done by Elasticsearch ingest pipelines.
 """
 
 import json
@@ -30,8 +30,7 @@ INDEX_NAME = "infra-raw-events"
 
 def send_raw_log(log_content, log_type, metadata=None):
     """
-    Send raw log content to Elasticsearch without any ingest pipeline.
-    Raw data will be processed later using Elastic Stream feature.
+    Send raw log content to Elasticsearch.
     
     Args:
         log_content: The raw log text
@@ -66,36 +65,12 @@ def send_raw_log(log_content, log_type, metadata=None):
     }
     
     try:
-        # Index without any pipeline - explicitly disable default pipeline if set
-        # Use pipeline="_none" to override any default pipeline in index template
-        resp = es.index(index=INDEX_NAME, document=doc, pipeline="_none")
-        print(f"✓ Indexed {log_type} log (raw data, no pipeline): {resp['result']} (ID: {resp['_id']})")
+        resp = es.index(index=INDEX_NAME, document=doc)
+        print(f"✓ Indexed {log_type} log: {resp['result']} (ID: {resp['_id']})")
         return resp
     except Exception as e:
-        error_msg = str(e)
-        # If _none doesn't work, try with empty string
-        if "pipeline" in error_msg.lower():
-            try:
-                resp = es.index(index=INDEX_NAME, document=doc, pipeline="")
-                print(f"✓ Indexed {log_type} log (raw data, no pipeline): {resp['result']} (ID: {resp['_id']})")
-                return resp
-            except Exception as e2:
-                # Last resort: try without pipeline parameter at all
-                try:
-                    # Create a new index without default pipeline
-                    alt_index = f"{INDEX_NAME}-raw"
-                    resp = es.index(index=alt_index, document=doc)
-                    print(f"✓ Indexed {log_type} log to {alt_index} (raw data): {resp['result']} (ID: {resp['_id']})")
-                    return resp
-                except Exception as e3:
-                    print(f"✗ Error indexing {log_type} log: {e3}", file=sys.stderr)
-                    print(f"  Tried: pipeline=_none, pipeline='', and alt index", file=sys.stderr)
-                    # Don't raise - allow pipeline to continue
-                    return None
-        else:
-            print(f"✗ Error indexing {log_type} log: {e}", file=sys.stderr)
-            # For other errors, log but don't fail the pipeline
-            return None
+        print(f"✗ Error indexing {log_type} log: {e}", file=sys.stderr)
+        raise
 
 def send_terraform_plan_json(plan_json_path, metadata=None):
     """Send Terraform plan JSON to Elasticsearch as raw data."""
@@ -128,11 +103,11 @@ if __name__ == "__main__":
         
         if command == "plan-json" and len(sys.argv) > 2:
             send_terraform_plan_json(sys.argv[2])
-        elif command == "output" and len(sys.argv) > 2:
+        elif command == "output" and len(sys.argv) > 3:
             log_type = sys.argv[2]
             # Read from stdin or file
-            if len(sys.argv) > 3:
-                with open(sys.argv[3], 'r') as f:
+            if len(sys.argv) > 4:
+                with open(sys.argv[4], 'r') as f:
                     content = f.read()
             else:
                 content = sys.stdin.read()
@@ -141,6 +116,5 @@ if __name__ == "__main__":
             print("Usage:")
             print("  python3 send_raw_logs.py plan-json <plan.json>")
             print("  python3 send_raw_logs.py output <type> [<file>]")
-            print("  echo 'log content' | python3 send_raw_logs.py output <type>")
             sys.exit(1)
 

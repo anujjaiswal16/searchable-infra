@@ -87,12 +87,14 @@ resource "docker_container" "app" {
   
   restart = "unless-stopped"
   
+  # Labels for Docker container metadata (optional - correlation is via env vars)
+  # In Docker provider v3.x, use map syntax without quotes on keys
   labels = {
-    "service.name"        = var.service_name
-    "service.version"     = var.app_version
-    "ci.build.id"         = var.build_id
-    "deployment.environment" = var.environment
-    "managed_by"          = "terraform"
+    "service.name"             = var.service_name
+    "service.version"          = var.app_version
+    "ci.build.id"              = var.build_id
+    "deployment.environment"   = var.environment
+    "managed_by"               = "terraform"
   }
 }
 

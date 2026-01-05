@@ -27,7 +27,6 @@ RUN wget https://releases.hashicorp.com/terraform/1.6.6/terraform_1.6.6_linux_am
 COPY plugins.txt /usr/share/jenkins/ref/plugins.txt
 RUN jenkins-plugin-cli -f /usr/share/jenkins/ref/plugins.txt
 
-# Add jenkins user to docker group (if docker group exists)
-RUN groupadd -f docker && usermod -aG docker jenkins || true
-
-USER jenkins
+# Note: Running as root in docker-compose.yml to access Docker socket
+# For production, use proper docker group permissions instead
+# USER jenkins

@@ -2,6 +2,31 @@
 
 ## Common Errors and Solutions
 
+### Error: "permission denied while trying to connect to the Docker daemon socket"
+
+**Problem:** Jenkins container doesn't have permission to access the Docker socket.
+
+**Solution:** The docker-compose.yml is configured to run Jenkins as root to access Docker. If you prefer not to run as root:
+
+1. **Option 1: Fix Docker socket permissions (recommended for production)**
+   ```bash
+   # On the host, check docker group GID
+   getent group docker
+   
+   # Update Jenkins Dockerfile to use the same GID
+   # Then rebuild: docker-compose build jenkins
+   ```
+
+2. **Option 2: Use Docker-in-Docker (DinD)**
+   - Mount a Docker-in-Docker container
+   - More complex but more secure
+
+3. **Option 3: Keep running as root (current setup - fine for demo)**
+   - The docker-compose.yml already sets `user: root`
+   - This works for local demos
+
+**Current Setup:** Jenkins runs as root in the container, which allows access to the Docker socket. This is acceptable for local demos.
+
 ### Error: "pipeline with id [terraform-logs-parser] does not exist"
 
 **Problem:** The Elasticsearch ingest pipeline hasn't been created yet.
@@ -13,21 +38,17 @@
    export ELASTIC_API_KEY="your-api-key-here"
    ```
 
-2. Run the setup script:
+2. Run the setup script to create index template (no pipeline needed):
    ```bash
-   ./elasticsearch/setup-pipelines.sh
+   ./elasticsearch/setup-index-template.sh
    ```
 
-3. Verify the pipeline was created:
+3. If you previously ran `setup-pipelines.sh`, remove the default pipeline:
    ```bash
-   curl -H "Authorization: ApiKey $ELASTIC_API_KEY" \
-        "$ELASTIC_CLOUD_ENDPOINT/_ingest/pipeline/terraform-logs-parser"
+   ./elasticsearch/remove-pipeline-from-template.sh
    ```
 
-**Note:** The updated `send_raw_logs.py` script will now handle this gracefully by:
-- Detecting the missing pipeline
-- Indexing to an alternative index (`infra-raw-events-raw`) without the pipeline
-- Providing clear instructions to run the setup script
+**Note:** The updated `send_raw_logs.py` script will now handle this gracefully by indexing to `infra-raw-events-raw` if the main index has pipeline issues.
 
 ### Error: "Bad substitution" in Jenkins Pipeline
 
@@ -82,7 +103,7 @@
 
 **Checklist:**
 1. ✅ Elasticsearch credentials are set in Jenkins
-2. ✅ Ingest pipelines are created (`./elasticsearch/setup-pipelines.sh`)
+2. ✅ Index template is created (`./elasticsearch/setup-index-template.sh`)
 3. ✅ Pipeline is running successfully
 4. ✅ Check Elasticsearch connection:
    ```bash
@@ -92,7 +113,7 @@
 5. ✅ Check if data is being indexed:
    ```bash
    curl -H "Authorization: ApiKey $ELASTIC_API_KEY" \
-        "$ELASTIC_CLOUD_ENDPOINT/infra-raw-events*/_search?size=1"
+        "$ELASTIC_CLOUD_ENDPOINT/infra-raw-events-raw*/_search?size=1"
    ```
 
 ### Application not sending telemetry
@@ -120,4 +141,3 @@ If you encounter other issues:
 2. Check Docker container logs
 3. Verify all environment variables are set
 4. Review the README.md for setup instructions
-

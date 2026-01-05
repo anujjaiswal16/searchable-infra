@@ -1,41 +1,56 @@
 # Jenkins Pipeline Setup Guide
 
-## Fixing the Git SCM Error
+## Fixing Git SCM Errors
 
-If you see an error like:
+If you see errors like:
 ```
 fatal: couldn't find remote ref refs/heads/master
+fatal: not in a git directory
 ```
 
-This happens because Jenkins is trying to checkout from Git, but the files are already mounted as volumes.
+This happens because Jenkins is configured to use "Pipeline script from SCM" but:
+- The workspace isn't a git repository, OR
+- The git repository doesn't have the expected branch
 
-## Solution: Configure Pipeline Script Directly
+## Solution: Configure Pipeline Script Directly (RECOMMENDED)
 
 ### Option 1: Use Pipeline Script (Recommended for Demo)
 
-1. Go to Jenkins → **New Item**
-2. Name it `infrastructure-pipeline`
-3. Select **Pipeline** (not "Pipeline script from SCM")
-4. Click **OK**
-5. Scroll down to **Pipeline** section
-6. Select **Pipeline script**
-7. Copy the entire contents of `cicd/Jenkinsfile` into the script text area
-8. Click **Save**
+**This is the easiest solution and recommended for demos.**
 
-This way, Jenkins will use the files from the mounted volume (`/var/jenkins_home/workspace`) and won't try to checkout from Git.
+1. Go to Jenkins → **Manage Jenkins** → **Manage Plugins**
+2. Make sure "Pipeline" plugin is installed
+3. Go to Jenkins → **New Item**
+4. Name it `infrastructure-pipeline`
+5. Select **Pipeline** (NOT "Pipeline script from SCM")
+6. Click **OK**
+7. Scroll down to **Pipeline** section
+8. Under **Definition**, select **Pipeline script**
+9. Copy the entire contents of `cicd/Jenkinsfile` into the script text area
+10. Click **Save**
 
-### Option 2: Disable SCM Checkout
+**Important:** This way, Jenkins will:
+- Use the files from the mounted volume (`/var/jenkins_home/workspace`)
+- NOT try to checkout from Git
+- Work immediately without any Git setup
+
+### Option 2: Disable SCM Checkout (Alternative)
 
 If you want to keep using "Pipeline script from SCM":
 
-1. Edit your pipeline job
-2. In **Pipeline** section, under **Additional Behaviours**
-3. Add **Skip Default Checkout** behavior
-4. This will skip the Git checkout and use mounted files instead
+1. Edit your pipeline job (`infrastructure-pipeline`)
+2. Scroll to **Pipeline** section
+3. Under **Additional Behaviours** → **Add** → **Advanced clone behaviours**
+4. Check **Skip Default Checkout**
+5. Click **Save**
 
-### Option 3: Use Local Git Repository
+This will skip the Git checkout and use mounted files instead.
 
-If you want to use Git SCM properly:
+**Note:** Option 1 (Pipeline script) is simpler and recommended.
+
+### Option 3: Initialize Git Repository (If you must use SCM)
+
+If you really want to use "Pipeline script from SCM":
 
 1. Initialize a git repo in your workspace:
    ```bash
@@ -43,13 +58,17 @@ If you want to use Git SCM properly:
    git init
    git add .
    git commit -m "Initial commit"
+   git branch -M main  # or master, depending on your default
    ```
 
 2. Configure Jenkins job:
    - **Pipeline script from SCM**
    - **SCM:** Git
-   - **Repository URL:** `file:///var/jenkins_home/workspace`
+   - **Repository URL:** `file:///var/jenkins_home/workspace` (for local) or your GitHub URL
+   - **Branches to build:** `*/main` (or `*/master`)
    - **Script Path:** `cicd/Jenkinsfile`
+
+**Note:** This is more complex and not recommended for demos. Use Option 1 instead.
 
 ## Updated Jenkinsfile
 

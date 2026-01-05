@@ -58,11 +58,13 @@ docker-compose up -d
 4. Create pipeline:
    - **New Item** → **Pipeline**
    - Name: `infrastructure-pipeline`
-   - **Important:** Select **Pipeline script** (NOT "Pipeline script from SCM")
+   - **CRITICAL:** Select **Pipeline script** (NOT "Pipeline script from SCM")
    - Copy the entire contents of `cicd/Jenkinsfile` into the script text area
    - Click **Save**
    
-   **Note:** Using "Pipeline script" directly allows Jenkins to use the mounted volume files without Git checkout. See `JENKINS_SETUP.md` for alternatives.
+   **Why?** This avoids "fatal: not in a git directory" errors.
+   Files are already mounted as volumes, so no Git checkout is needed.
+   See `JENKINS_SETUP.md` if you see Git errors.
 
 ### 6. Run Pipeline
 

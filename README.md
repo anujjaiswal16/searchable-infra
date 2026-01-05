@@ -135,15 +135,19 @@ docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
 
 #### 5.4. Create Pipeline Job
 
+**IMPORTANT: Use "Pipeline script" directly, NOT "Pipeline script from SCM"**
+
 1. Click **New Item**
 2. Name it `infrastructure-pipeline`
-3. Select **Pipeline**
-4. In **Pipeline** section:
-   - **Definition:** Pipeline script from SCM
-   - **SCM:** Git
-   - **Repository URL:** `file:///var/jenkins_home/workspace` (or your repo path)
-   - **Script Path:** `cicd/Jenkinsfile`
-5. Click **Save**
+3. Select **Pipeline** (NOT "Pipeline script from SCM")
+4. Click **OK**
+5. Scroll down to **Pipeline** section
+6. Under **Definition**, select **Pipeline script** (NOT "Pipeline script from SCM")
+7. Copy the entire contents of `cicd/Jenkinsfile` into the script text area
+8. Click **Save**
+
+**Why?** This avoids "fatal: not in a git directory" errors since files are already mounted as volumes.
+See `JENKINS_SETUP.md` for detailed explanation and alternatives.
 
 ### 6. Run the Pipeline
 

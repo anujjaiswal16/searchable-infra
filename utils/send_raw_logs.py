@@ -2,7 +2,7 @@
 """
 Send raw Terraform logs and CI/CD metadata to Elasticsearch.
 This script sends unparsed logs to the infra-raw-events-* index.
-Parsing will be done by Elasticsearch ingest pipelines.
+Raw data will be processed later using Elastic Stream feature.
 """
 
 import json
@@ -28,17 +28,10 @@ es = Elasticsearch(
 # Index name for raw events
 INDEX_NAME = "infra-raw-events"
 
-def check_pipeline_exists(pipeline_name="terraform-logs-parser"):
-    """Check if the ingest pipeline exists."""
-    try:
-        es.ingest.get_pipeline(id=pipeline_name)
-        return True
-    except Exception:
-        return False
-
 def send_raw_log(log_content, log_type, metadata=None):
     """
-    Send raw log content to Elasticsearch.
+    Send raw log content to Elasticsearch without any ingest pipeline.
+    Raw data will be processed later using Elastic Stream feature.
     
     Args:
         log_content: The raw log text
@@ -73,35 +66,35 @@ def send_raw_log(log_content, log_type, metadata=None):
     }
     
     try:
-        # Try to index normally (will use default pipeline from index template if it exists)
-        resp = es.index(index=INDEX_NAME, document=doc)
-        print(f"✓ Indexed {log_type} log: {resp['result']} (ID: {resp['_id']})")
+        # Index without any pipeline - explicitly disable default pipeline if set
+        # Use pipeline="_none" to override any default pipeline in index template
+        resp = es.index(index=INDEX_NAME, document=doc, pipeline="_none")
+        print(f"✓ Indexed {log_type} log (raw data, no pipeline): {resp['result']} (ID: {resp['_id']})")
         return resp
     except Exception as e:
         error_msg = str(e)
-        # Check if error is due to missing pipeline
-        if "pipeline" in error_msg.lower() and ("does not exist" in error_msg.lower() or "not found" in error_msg.lower()):
-            print(f"⚠ Ingest pipeline 'terraform-logs-parser' not found.", file=sys.stderr)
-            print(f"  Indexing to alternative index without pipeline...", file=sys.stderr)
-            print(f"  To fix: Run ./elasticsearch/setup-pipelines.sh", file=sys.stderr)
-            
-            # Try indexing to a temporary index without pipeline
-            # Use a different index name that doesn't have the default pipeline
+        # If _none doesn't work, try with empty string
+        if "pipeline" in error_msg.lower():
             try:
-                alt_index = f"{INDEX_NAME}-raw"
-                resp = es.index(index=alt_index, document=doc)
-                print(f"✓ Indexed {log_type} log to {alt_index} (without pipeline): {resp['result']} (ID: {resp['_id']})")
-                print(f"  Note: Run setup-pipelines.sh to enable proper parsing", file=sys.stderr)
+                resp = es.index(index=INDEX_NAME, document=doc, pipeline="")
+                print(f"✓ Indexed {log_type} log (raw data, no pipeline): {resp['result']} (ID: {resp['_id']})")
                 return resp
             except Exception as e2:
-                print(f"✗ Error indexing to alternative index: {e2}", file=sys.stderr)
-                print(f"  Original error: {e}", file=sys.stderr)
-                # Don't raise - allow pipeline to continue, but log the error
-                return None
+                # Last resort: try without pipeline parameter at all
+                try:
+                    # Create a new index without default pipeline
+                    alt_index = f"{INDEX_NAME}-raw"
+                    resp = es.index(index=alt_index, document=doc)
+                    print(f"✓ Indexed {log_type} log to {alt_index} (raw data): {resp['result']} (ID: {resp['_id']})")
+                    return resp
+                except Exception as e3:
+                    print(f"✗ Error indexing {log_type} log: {e3}", file=sys.stderr)
+                    print(f"  Tried: pipeline=_none, pipeline='', and alt index", file=sys.stderr)
+                    # Don't raise - allow pipeline to continue
+                    return None
         else:
             print(f"✗ Error indexing {log_type} log: {e}", file=sys.stderr)
-            # For other errors, we might want to raise, but for demo purposes, let's not fail the pipeline
-            print(f"  Continuing pipeline execution...", file=sys.stderr)
+            # For other errors, log but don't fail the pipeline
             return None
 
 def send_terraform_plan_json(plan_json_path, metadata=None):

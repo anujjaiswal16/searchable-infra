@@ -1,0 +1,60 @@
+#!/bin/bash
+# Setup Elasticsearch index template for raw events (without ingest pipeline)
+# Use this if you want to process data later with Elastic Stream feature
+
+set -e
+
+ELASTIC_CLOUD_ENDPOINT="${ELASTIC_CLOUD_ENDPOINT:-}"
+ELASTIC_API_KEY="${ELASTIC_API_KEY:-}"
+
+if [ -z "$ELASTIC_CLOUD_ENDPOINT" ] || [ -z "$ELASTIC_API_KEY" ]; then
+    echo "Error: ELASTIC_CLOUD_ENDPOINT and ELASTIC_API_KEY must be set"
+    exit 1
+fi
+
+echo "Creating index template for infra-raw-events (no default pipeline)..."
+
+curl -X PUT "${ELASTIC_CLOUD_ENDPOINT}/_index_template/infra-raw-events-template" \
+  -H "Authorization: ApiKey ${ELASTIC_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "index_patterns": ["infra-raw-events*"],
+    "template": {
+      "settings": {
+        "number_of_shards": 1,
+        "number_of_replicas": 0
+      },
+      "mappings": {
+        "properties": {
+          "@timestamp": { "type": "date" },
+          "log.type": { "type": "keyword" },
+          "log.raw": { "type": "text" },
+          "log.source": { "type": "keyword" },
+          "ci.pipeline.name": { "type": "keyword" },
+          "ci.pipeline.id": { "type": "keyword" },
+          "ci.pipeline_id": { "type": "keyword" },
+          "ci.build.id": { "type": "keyword" },
+          "ci.build.number": { "type": "keyword" },
+          "ci.build.url": { "type": "keyword" },
+          "vcs.revision": { "type": "keyword" },
+          "vcs.branch": { "type": "keyword" },
+          "infra.change_id": { "type": "keyword" },
+          "service.name": { "type": "keyword" },
+          "service.version": { "type": "keyword" },
+          "environment": { "type": "keyword" },
+          "region": { "type": "keyword" },
+          "terraform.resource_changes": { "type": "object", "enabled": true },
+          "terraform.variables": { "type": "object", "enabled": true },
+          "event.category": { "type": "keyword" },
+          "event.type": { "type": "keyword" }
+        }
+      }
+    }
+  }'
+
+echo ""
+echo "✓ Index template created successfully (no default pipeline)"
+echo ""
+echo "Note: Raw data will be indexed without processing."
+echo "You can use Elastic Stream feature to create processors and pipelines later."
+

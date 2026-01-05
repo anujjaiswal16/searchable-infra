@@ -30,8 +30,10 @@ EOF
 ```bash
 export ELASTIC_CLOUD_ENDPOINT="https://your-deployment.es.us-east-1.aws.cloud.es.io:443"
 export ELASTIC_API_KEY="your-api-key-here"
-./elasticsearch/setup-pipelines.sh
+./elasticsearch/setup-index-template.sh
 ```
+
+**Note:** This creates the index template without ingest pipelines. Raw data will be indexed, and you can use Elastic Stream feature to process it later.
 
 ### 4. Start Services
 

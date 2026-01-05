@@ -80,18 +80,22 @@ EOF
 
 ### 3. Setup Elasticsearch
 
-#### 3.1. Create Ingest Pipelines and Index Templates
+#### 3.1. Create Index Template (No Ingest Pipeline)
+
+Since we're sending raw data and will use Elastic Stream feature later, we only need the index template:
 
 ```bash
 export ELASTIC_CLOUD_ENDPOINT="https://your-deployment.es.us-east-1.aws.cloud.es.io:443"
 export ELASTIC_API_KEY="your-api-key-here"
 
-./elasticsearch/setup-pipelines.sh
+./elasticsearch/setup-index-template.sh
 ```
 
 This script will:
-- Create the `terraform-logs-parser` ingest pipeline
-- Create index templates for `infra-raw-events*` and `infra-changes*`
+- Create index template for `infra-raw-events*` without default pipeline
+- Set up proper field mappings for correlation
+
+**Note:** If you want to use ingest pipelines instead, you can run `./elasticsearch/setup-pipelines.sh` which creates both the pipeline and template.
 
 ### 4. Start the Demo Environment
 

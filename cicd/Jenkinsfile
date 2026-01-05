@@ -1,5 +1,9 @@
 pipeline {
     agent any
+    
+    parameters {
+        string(name: 'SIMULATED_LATENCY', defaultValue: '0', description: 'Simulated latency in seconds for chaos testing')
+    }
 
     environment {
         // Elasticsearch credentials (configure in Jenkins)
@@ -15,7 +19,7 @@ pipeline {
         TF_VAR_build_id = "${env.BUILD_ID}"
         TF_VAR_environment = "${ENVIRONMENT}"
         TF_VAR_service_name = "${SERVICE_NAME}"
-        TF_VAR_simulated_latency = "${env.SIMULATED_LATENCY ?: '0'}"
+        TF_VAR_simulated_latency = "${params.SIMULATED_LATENCY ?: '0'}"
     }
 
     stages {

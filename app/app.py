@@ -18,6 +18,11 @@ try:
     from opentelemetry.sdk.resources import Resource
     from opentelemetry.instrumentation.flask import FlaskInstrumentor
     
+    # Logging imports
+    from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+    from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+    from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
+    
     # Setup tracing
     otel_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4318")
     app_version = os.getenv("APP_VERSION", "v1.0.0")
@@ -39,6 +44,14 @@ try:
     trace.get_tracer_provider().add_span_processor(
         BatchSpanProcessor(OTLPSpanExporter(endpoint=f"{otel_endpoint}/v1/traces"))
     )
+    
+    # Setup OTLP Logging
+    logger_provider = LoggerProvider(resource=resource)
+    logger_provider.add_log_record_processor(
+        BatchLogRecordProcessor(OTLPLogExporter(endpoint=f"{otel_endpoint}/v1/logs"))
+    )
+    handler = LoggingHandler(level=logging.NOTSET, logger_provider=logger_provider)
+    logging.getLogger().addHandler(handler)
     
     OTEL_ENABLED = True
 except ImportError as e:

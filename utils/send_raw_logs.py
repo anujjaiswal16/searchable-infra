@@ -98,7 +98,7 @@ def send_raw_log(log_content, log_type, metadata=None):
         return None
 
 def send_terraform_plan_json(plan_json_path, metadata=None):
-    """Send Terraform plan JSON to Elasticsearch as raw data."""
+    """Send Terraform plan JSON to Elasticsearch as raw data, but with parsed summary."""
     if not os.path.exists(plan_json_path):
         print(f"Warning: Plan file {plan_json_path} not found.", file=sys.stderr)
         return
@@ -106,11 +106,66 @@ def send_terraform_plan_json(plan_json_path, metadata=None):
     with open(plan_json_path, 'r') as f:
         plan_data = json.load(f)
     
-    # Send the entire plan as raw JSON string
+    # Extract meaningful summary
+    resource_changes = plan_data.get('resource_changes', [])
+    summary = {
+        "create": 0,
+        "update": 0,
+        "delete": 0,
+        "no-op": 0
+    }
+    
+    changed_resources = []
+    
+    for rc in resource_changes:
+        actions = rc.get('change', {}).get('actions', [])
+        name = f"{rc.get('type')}.{rc.get('name')}"
+        
+        if 'create' in actions:
+            summary['create'] += 1
+            changed_resources.append(f"[+] {name}")
+        elif 'delete' in actions:
+            summary['delete'] += 1
+            changed_resources.append(f"[-] {name}")
+        elif 'update' in actions:
+            summary['update'] += 1
+            changed_resources.append(f"[~] {name}")
+        elif 'no-op' in actions:
+            summary['no-op'] += 1
+    
+    # Send the main document with parsed fields
+    plan_metadata = {
+        "terraform.plan.summary.create": summary['create'],
+        "terraform.plan.summary.update": summary['update'],
+        "terraform.plan.summary.delete": summary['delete'],
+        "terraform.plan.list": changed_resources
+    }
+    
+    if metadata:
+        plan_metadata.update(metadata)
+        
+    # Send the raw plan with summary header
     send_raw_log(
         log_content=json.dumps(plan_data, indent=2),
         log_type="terraform_plan_json",
-        metadata=metadata
+        metadata=plan_metadata
+    )
+    
+    # Send a simplified summary log for easier reading
+    summary_text = (
+        f"Terraform Plan Summary:\n"
+        f"  Create: {summary['create']}\n"
+        f"  Update: {summary['update']}\n"
+        f"  Delete: {summary['delete']}\n"
+        f"  No-op: {summary['no-op']}\n\n"
+        "Changed Resources:\n" + 
+        "\n".join(f"  {r}" for r in changed_resources)
+    )
+    
+    send_raw_log(
+        log_content=summary_text,
+        log_type="terraform_plan_summary",
+        metadata=plan_metadata
     )
 
 def send_terraform_output(output_text, command_type, metadata=None):

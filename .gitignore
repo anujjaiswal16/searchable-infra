@@ -53,3 +53,13 @@ terraform_binary
 otelcol*
 otelcol-contrib
 bin/
+
+CHANGELOG.md
+COMPLETION_CHECKLIST.md
+DEMO_GUIDE.md
+FIXES.md
+JENKINS_SETUP.md
+LICENSE
+SUMMARY.md
+TROUBLESHOOTING.md
+

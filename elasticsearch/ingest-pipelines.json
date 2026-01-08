@@ -20,46 +20,15 @@
           }
         },
         {
+          "json": {
+            "field": "log.raw",
+            "target_field": "terraform.plan",
+            "if": "ctx.log.type == 'terraform_plan_json'"
+          }
+        },
+        {
           "script": {
-            "source": """
-              // Extract resource changes from Terraform plan output
-              if (ctx['log.type'] == 'terraform_plan' || ctx['log.type'] == 'terraform_plan_json') {
-                String rawLog = ctx['log.raw'];
-                
-                // Try to parse JSON if it's a plan JSON
-                if (rawLog != null && rawLog.trim().startsWith('{')) {
-                  try {
-                    Map planData = new groovy.json.JsonSlurper().parseText(rawLog);
-                    ctx['terraform.plan.resource_changes_count'] = planData.resource_changes?.size() ?: 0;
-                    
-                    // Extract resource changes
-                    if (planData.resource_changes != null) {
-                      List changes = [];
-                      for (def change : planData.resource_changes) {
-                        Map changeInfo = [
-                          'address': change.address,
-                          'type': change.type,
-                          'actions': change.change?.actions ?: [],
-                          'action': change.change?.actions?.size() > 0 ? change.change.actions[0] : 'no-op'
-                        ];
-                        changes.add(changeInfo);
-                      }
-                      ctx['terraform.resource_changes'] = changes;
-                    }
-                    
-                    // Extract variables
-                    if (planData.variables != null) {
-                      ctx['terraform.variables.app_version'] = planData.variables.app_version?.value;
-                      ctx['terraform.variables.build_id'] = planData.variables.build_id?.value;
-                      ctx['terraform.variables.environment'] = planData.variables.environment?.value;
-                      ctx['terraform.variables.service_name'] = planData.variables.service_name?.value;
-                    }
-                  } catch (Exception e) {
-                    // If JSON parsing fails, continue with other processors
-                  }
-                }
-              }
-            """,
+            "source": "if (ctx['log.type'] == 'terraform_plan_json' && ctx['terraform.plan'] != null) { def plan = ctx['terraform.plan']; if (plan.resource_changes != null) { ctx['terraform.resource_changes_count'] = plan.resource_changes.size(); def changes = []; for (def change : plan.resource_changes) { def changeInfo = ['address': change.address, 'type': change.type, 'actions': change.change?.actions ?: []]; changes.add(changeInfo); } ctx['terraform.resource_changes'] = changes; } if (plan.variables != null) { ctx['terraform.variables.app_version'] = plan.variables.app_version?.value; ctx['terraform.variables.build_id'] = plan.variables.build_id?.value; ctx['terraform.variables.environment'] = plan.variables.environment?.value; ctx['terraform.variables.service_name'] = plan.variables.service_name?.value; } }",
             "lang": "painless"
           }
         },
@@ -126,4 +95,3 @@
     }
   ]
 }
-

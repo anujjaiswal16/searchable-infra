@@ -76,7 +76,7 @@ ELASTIC_API_KEY=your-api-key-here
 EOF
 ```
 
-**Important:** Replace with your actual Elastic Cloud endpoint and API key.
+**Important:** Replace with your actual APM server endpoint and API key.
 
 ### 3. Setup Elasticsearch
 

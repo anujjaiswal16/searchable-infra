@@ -435,4 +435,4 @@ docker exec <app-container> env | grep OTEL
 
 ---
 
-**Built for Elastic + HashiCorp Community Events**
+
